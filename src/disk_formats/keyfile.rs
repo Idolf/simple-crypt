@@ -128,6 +128,12 @@ mod tests {
     use rand::{self, Rng};
     use bincode;
 
+    fn gen_password<R: Rng>(mut rng: R) -> Vec<u8> {
+        (0..rng.gen_range(0usize, 128usize))
+            .map(|_| rng.gen())
+            .collect()
+    }
+
     #[test]
     fn test_length() {
         let mut rng = rand::thread_rng();
@@ -138,11 +144,294 @@ mod tests {
             secret_key,
             pwhash_limits::OpsLimit(1),
             pwhash_limits::MemLimit(1),
-            &(0..rng.gen::<usize>() % 128)
-                .map(|_| rng.gen())
-                .collect::<Vec<u8>>(),
+            &gen_password(&mut rng),
         ).unwrap();
         let size = bincode::serialized_size(&keyfile);
         assert_eq!(size as usize, KEYFILE_FILE_SIZE);
+    }
+
+    fn gen_change_seen<F: FnMut() -> Keyfile>(mut gen_keyfile: F) -> [bool; KEYFILE_FILE_SIZE] {
+        let mut gen_keyfile = move || {
+            let res = bincode::serialize(&gen_keyfile(), bincode::Infinite).unwrap();
+            assert_eq!(res.len(), KEYFILE_FILE_SIZE);
+            res
+        };
+        let reference = gen_keyfile();
+
+        let mut change_seen = [false; KEYFILE_FILE_SIZE];
+
+        for _ in 0..16 {
+            let cur = gen_keyfile();
+            for (n, (reference_byte, cur_byte)) in reference.iter().zip(cur.iter()).enumerate() {
+                if reference_byte != cur_byte {
+                    change_seen[n] = true;
+                }
+            }
+        }
+        change_seen
+    }
+
+    #[test]
+    fn test_change_constant() {
+        let mut rng = rand::thread_rng();
+        let (public_key, secret_key) = box_::gen_keypair();
+        let password = gen_password(&mut rng);
+
+        let change_seen = gen_change_seen(|| {
+            Keyfile::encrypt(
+                public_key.clone(),
+                secret_key.clone(),
+                pwhash_limits::OpsLimit(1),
+                pwhash_limits::MemLimit(1),
+                &password,
+            ).unwrap()
+        });
+
+        assert!(
+            change_seen.as_ref()
+                == [
+            false, false, false, false, // magic_header
+            false, false, false, false, // version
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            false, false, false, false, false, false, false, false, // ops_limit
+            false, false, false, false, false, false, false, false, // mem_limit
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_tag
+            true, true, true, true, true, true, true, true, // secretbox_tag
+       ].as_ref()
+        );
+    }
+
+    #[test]
+    fn test_change_keys() {
+        let mut rng = rand::thread_rng();
+        let password = gen_password(&mut rng);
+
+        let change_seen = gen_change_seen(|| {
+            let (public_key, secret_key) = box_::gen_keypair();
+            Keyfile::encrypt(
+                public_key.clone(),
+                secret_key.clone(),
+                pwhash_limits::OpsLimit(1),
+                pwhash_limits::MemLimit(1),
+                &password,
+            ).unwrap()
+        });
+
+        assert!(
+            change_seen.as_ref()
+                == [
+            false, false, false, false, // magic_header
+            false, false, false, false, // version
+            true, true, true, true, true, true, true, true, // public_key
+            true, true, true, true, true, true, true, true, // public_key
+            true, true, true, true, true, true, true, true, // public_key
+            true, true, true, true, true, true, true, true, // public_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            false, false, false, false, false, false, false, false, // ops_limit
+            false, false, false, false, false, false, false, false, // mem_limit
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_tag
+            true, true, true, true, true, true, true, true, // secretbox_tag
+       ].as_ref()
+        );
+    }
+
+    #[test]
+    fn test_change_password() {
+        let mut rng = rand::thread_rng();
+        let (public_key, secret_key) = box_::gen_keypair();
+
+        let change_seen = gen_change_seen(|| {
+            let password = gen_password(&mut rng);
+            Keyfile::encrypt(
+                public_key.clone(),
+                secret_key.clone(),
+                pwhash_limits::OpsLimit(1),
+                pwhash_limits::MemLimit(1),
+                &password,
+            ).unwrap()
+        });
+
+        assert!(
+            change_seen.as_ref()
+                == [
+            false, false, false, false, // magic_header
+            false, false, false, false, // version
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            false, false, false, false, false, false, false, false, // ops_limit
+            false, false, false, false, false, false, false, false, // mem_limit
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_tag
+            true, true, true, true, true, true, true, true, // secretbox_tag
+       ].as_ref()
+        );
+    }
+
+    #[test]
+    fn test_change_ops() {
+        let mut rng = rand::thread_rng();
+        let (public_key, secret_key) = box_::gen_keypair();
+
+        let change_seen = gen_change_seen(|| {
+            let password = gen_password(&mut rng);
+            Keyfile::encrypt(
+                public_key.clone(),
+                secret_key.clone(),
+                pwhash_limits::OpsLimit(rng.gen_range(0, 65535)),
+                pwhash_limits::MemLimit(1),
+                &password,
+            ).unwrap()
+        });
+
+        assert!(
+            change_seen.as_ref()
+                == [
+            false, false, false, false, // magic_header
+            false, false, false, false, // version
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, false, false, false, false, false, false, // ops_limit
+            false, false, false, false, false, false, false, false, // mem_limit
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_tag
+            true, true, true, true, true, true, true, true, // secretbox_tag
+       ].as_ref()
+        );
+    }
+
+    #[test]
+    fn test_change_mem() {
+        let mut rng = rand::thread_rng();
+        let (public_key, secret_key) = box_::gen_keypair();
+
+        let change_seen = gen_change_seen(|| {
+            let password = gen_password(&mut rng);
+            Keyfile::encrypt(
+                public_key.clone(),
+                secret_key.clone(),
+                pwhash_limits::OpsLimit(1),
+                pwhash_limits::MemLimit(rng.gen_range(0, 65535)),
+                &password,
+            ).unwrap()
+        });
+
+        assert!(
+            change_seen.as_ref()
+                == [
+            false, false, false, false, // magic_header
+            false, false, false, false, // version
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            false, false, false, false, false, false, false, false, // public_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            false, false, false, false, false, false, false, false, // ops_limit
+            true, true, false, false, false, false, false, false, // mem_limit
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_tag
+            true, true, true, true, true, true, true, true, // secretbox_tag
+       ].as_ref()
+        );
+    }
+
+    #[test]
+    fn test_change_all() {
+        let mut rng = rand::thread_rng();
+
+        let change_seen = gen_change_seen(|| {
+            let (public_key, secret_key) = box_::gen_keypair();
+            let password = gen_password(&mut rng);
+            Keyfile::encrypt(
+                public_key.clone(),
+                secret_key.clone(),
+                pwhash_limits::OpsLimit(rng.gen_range(0, 65535)),
+                pwhash_limits::MemLimit(rng.gen_range(0, 65535)),
+                &password,
+            ).unwrap()
+        });
+
+        assert!(
+            change_seen.as_ref()
+                == [
+            false, false, false, false, // magic_header
+            false, false, false, false, // version
+            true, true, true, true, true, true, true, true, // public_key
+            true, true, true, true, true, true, true, true, // public_key
+            true, true, true, true, true, true, true, true, // public_key
+            true, true, true, true, true, true, true, true, // public_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, true, true, true, true, true, true, // secret_key
+            true, true, false, false, false, false, false, false, // ops_limit
+            true, true, false, false, false, false, false, false, // mem_limit
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // password_salt
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_nonce
+            true, true, true, true, true, true, true, true, // secretbox_tag
+            true, true, true, true, true, true, true, true, // secretbox_tag
+       ].as_ref()
+        );
     }
 }
