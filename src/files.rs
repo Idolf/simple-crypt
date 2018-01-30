@@ -1,22 +1,16 @@
-use base64;
 use sodiumoxide::crypto::box_;
 use failure::{Error, ResultExt};
 use std::fs;
 use std::io::{Read, Write};
 use bincode;
 use std::fs::File;
+use simple_crypt_util::pubkey_ext::PublicKeyExt;
 
 use disk_formats::keyfile::Keyfile;
 use disk_formats::encrypted_file::EncryptedFile;
 
 pub fn encrypt(public_key: &str, input_file: &str, output_file: &str) -> Result<(), Error> {
-    let public_key = base64::decode(public_key).context("invalid public key")?;
-    ensure!(
-        public_key.len() == box_::PUBLICKEYBYTES,
-        "invalid public key"
-    );
-
-    let public_key = box_::PublicKey(*array_ref!(&public_key, 0, box_::PUBLICKEYBYTES));
+    let public_key = box_::PublicKey::from_base64(&public_key).context("invalid public key")?;
     let mut input_file = fs::File::open(input_file).context("could not open input file")?;
     let mut output_file = fs::File::create(output_file).context("could not create output file")?;
 

@@ -1,3 +1,4 @@
+#[macro_export]
 macro_rules! fixed_value {
     ($ident:ident, $value:expr, $name:expr) => {
         #[derive(Default, Debug)]

@@ -26,8 +26,8 @@ where
         self.inner().as_slice()
     }
 
-    fn as_slice_mut(&mut self) -> &mut [u8] {
-        self.inner_mut().as_slice_mut()
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.inner_mut().as_mut_slice()
     }
 }
 
@@ -77,6 +77,7 @@ where
 
 newtype_array!(box_::PublicKey, box_::PUBLICKEYBYTES);
 newtype_array!(box_::SecretKey, box_::SECRETKEYBYTES);
+newtype_array!(box_::PrecomputedKey, box_::PRECOMPUTEDKEYBYTES);
 newtype_array!(box_::Tag, box_::MACBYTES);
 newtype_array!(box_::Nonce, box_::NONCEBYTES);
 newtype_array!(pwhash::Salt, pwhash::SALTBYTES);

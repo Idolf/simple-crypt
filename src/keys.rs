@@ -1,10 +1,10 @@
 use failure::{self, Error, ResultExt};
 use sodiumoxide::crypto::{box_, pwhash};
 use std::fs::File;
-use base64;
 use bincode;
 use tempfile::NamedTempFile;
 use std::path::Path;
+use simple_crypt_util::pubkey_ext::PublicKeyExt;
 
 use disk_formats::keyfile::Keyfile;
 
@@ -24,7 +24,7 @@ pub fn gen(
 
     println!(
         "Your public key is: {}",
-        base64::encode(&keyfile_data.public_key)
+        keyfile_data.public_key.to_base64()
     );
 
     let mut keyfile = File::create(keyfile).context("unable to create secret key file")?;
@@ -42,7 +42,7 @@ pub fn print_public_key(keyfile: &str) -> Result<(), Error> {
             .context("could not deserialize key file")?
     };
 
-    println!("{}", base64::encode(&keyfile_data.public_key.0));
+    println!("{}", keyfile_data.public_key.to_base64());
 
     Ok(())
 }

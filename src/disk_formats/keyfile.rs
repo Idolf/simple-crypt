@@ -1,7 +1,7 @@
 use sodiumoxide::crypto::{box_, pwhash, secretbox};
 
-use serde_arrays::{self, FixedArray};
-use serde_newtype;
+use simple_crypt_util::serde_arrays::{self, FixedArray};
+use simple_crypt_util::serde_newtype;
 use passwords;
 
 fixed_value!(MagicHeader, 0xb41f7497, "magic header");

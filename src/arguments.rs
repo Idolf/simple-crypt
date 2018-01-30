@@ -6,7 +6,6 @@ use clap::AppSettings;
 #[structopt(global_setting_raw = "AppSettings::DeriveDisplayOrder")]
 #[structopt(global_setting_raw = "AppSettings::GlobalVersion")]
 #[structopt(global_setting_raw = "AppSettings::InferSubcommands")]
-#[structopt(global_setting_raw = "AppSettings::ArgRequiredElseHelp")]
 pub enum Cmd {
     #[structopt(name = "keys",
                 about = "Commands about keys (such as generating or re-encrypting)")]
@@ -24,6 +23,11 @@ pub enum Cmd {
         #[structopt(help = "Keyfile")] keyfile: String,
         #[structopt(help = "Ciphertext file")] input_file: String,
         #[structopt(help = "Plaintext file")] output_file: String,
+    },
+    #[cfg(feature = "simple-crypt-daemon")]
+    #[structopt(name = "daemon", about = "Subcommands dealing with the key daemon")]
+    Daemon {
+        #[structopt(subcommand)] cmd: DaemonCmd,
     },
 }
 
@@ -50,5 +54,27 @@ pub enum KeyCmd {
         #[structopt(long = "password-mem-limit",
                     help = "Set mem limit (in bytes) for hashing the password")]
         password_mem_limit: Option<usize>,
+    },
+}
+
+#[cfg(feature = "simple-crypt-daemon")]
+#[derive(StructOpt, Debug)]
+pub enum DaemonCmd {
+    #[structopt(name = "start", about = "Starts a new instance of the daemon")] Start,
+    #[structopt(name = "stop", about = "Stop the running instance of the daemon")] Stop,
+    #[structopt(name = "add", about = "Adds a keyfile to the running server")]
+    AddKey {
+        #[structopt(help = "Keyfile")] keyfile: String,
+    },
+    #[structopt(name = "remove", about = "Removes a key from the running server")]
+    RemoveKey {
+        #[structopt(help = "Public key")] public_key: String,
+    },
+    #[structopt(name = "list", about = "List all keys known to the the running server")] List,
+    #[structopt(name = "decrypt",
+                about = "Decrypts a file by using the secret key stored on the running server")]
+    Decrypt {
+        #[structopt(help = "Ciphertext file")] input_file: String,
+        #[structopt(help = "Plaintext file")] output_file: String,
     },
 }

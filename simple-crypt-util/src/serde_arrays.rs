@@ -3,11 +3,11 @@ use serde::de::{Deserializer, Error, SeqAccess, Visitor};
 use std::fmt;
 use std::marker::PhantomData;
 
-pub trait FixedArray {
+pub trait FixedArray: Sized {
     const SIZE: usize;
     fn zero() -> Self;
     fn as_slice(&self) -> &[u8];
-    fn as_slice_mut(&mut self) -> &mut [u8];
+    fn as_mut_slice(&mut self) -> &mut [u8];
 }
 
 macro_rules! fixed_array {
@@ -22,7 +22,7 @@ macro_rules! fixed_array {
                 &self[..]
             }
 
-            fn as_slice_mut(&mut self) -> &mut [u8] {
+            fn as_mut_slice(&mut self) -> &mut [u8] {
                 &mut self[..]
             }
         }
@@ -64,7 +64,7 @@ where
         {
             let mut out = T::zero();
             {
-                let out = out.as_slice_mut();
+                let out = out.as_mut_slice();
 
                 for (n, b) in out.iter_mut().enumerate() {
                     if let Some(next) = seq.next_element()? {
@@ -79,4 +79,38 @@ where
     }
 
     deserializer.deserialize_tuple(T::SIZE, ArrayVisitor(PhantomData))
+}
+
+pub mod bytes {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::de::{Error, Expected};
+    use super::FixedArray;
+    use serde_bytes;
+
+    pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: FixedArray,
+    {
+        serde_bytes::Bytes::new(value.as_slice()).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: FixedArray,
+    {
+        let vec = serde_bytes::ByteBuf::deserialize(deserializer)?;
+        if vec.len() != T::SIZE {
+            let s = format!("bytes array of size {}", T::SIZE);
+            let s: &Expected = &s.as_ref();
+
+            Err(D::Error::invalid_length(vec.len(), s))
+        } else {
+            let mut res = T::zero();
+            res.as_mut_slice().copy_from_slice(&vec);
+            Ok(res)
+        }
+    }
+
 }

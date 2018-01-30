@@ -1,8 +1,8 @@
 use sodiumoxide::crypto::box_;
 use std::fmt;
-use base64;
 
-use serde_arrays::{self, FixedArray};
+use simple_crypt_util::serde_arrays::{self, FixedArray};
+use simple_crypt_util::pubkey_ext::PublicKeyExt;
 use super::keyfile;
 
 fixed_value!(MagicHeader, 0x26b1872d, "magic header");
@@ -17,6 +17,26 @@ pub struct EncryptedFile {
     #[serde(with = "serde_arrays")] pub ephemeral_public_key: box_::PublicKey,
     #[serde(with = "serde_arrays")] pub box_tag: box_::Tag,
     pub data: Vec<u8>,
+}
+
+#[derive(Fail, Debug)]
+pub enum PrecomputedDecryptError {
+    SignatureError,
+    PaddingError,
+}
+
+impl fmt::Display for PrecomputedDecryptError {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            PrecomputedDecryptError::PaddingError => {
+                write!(formatter, "The file padding was incorrect")
+            }
+            PrecomputedDecryptError::SignatureError => write!(
+                formatter,
+                "The signature for the file did not match the content"
+            ),
+        }
+    }
 }
 
 #[derive(Fail, Debug)]
@@ -41,8 +61,8 @@ impl fmt::Display for DecryptError {
                 write!(
                     formatter,
                     "Encrypted file was destined for {}, while keyfile contained {}.",
-                    base64::encode(from_encrypted),
-                    base64::encode(from_keyfile)
+                    from_encrypted.to_base64(),
+                    from_keyfile.to_base64()
                 )
             }
             DecryptError::SignatureError => write!(
@@ -58,6 +78,15 @@ impl fmt::Display for DecryptError {
 impl From<keyfile::KeyfileError> for DecryptError {
     fn from(error: keyfile::KeyfileError) -> DecryptError {
         DecryptError::KeyfileError(error)
+    }
+}
+
+impl From<PrecomputedDecryptError> for DecryptError {
+    fn from(error: PrecomputedDecryptError) -> DecryptError {
+        match error {
+            PrecomputedDecryptError::PaddingError => DecryptError::PaddingError,
+            PrecomputedDecryptError::SignatureError => DecryptError::SignatureError,
+        }
     }
 }
 
@@ -92,7 +121,7 @@ impl EncryptedFile {
         result
     }
 
-    pub fn decrypt(mut self, keyfile: &keyfile::Keyfile) -> Result<Vec<u8>, DecryptError> {
+    pub fn decrypt(self, keyfile: &keyfile::Keyfile) -> Result<Vec<u8>, DecryptError> {
         if self.public_key != keyfile.public_key {
             Err(DecryptError::InvalidPublicKey {
                 from_encrypted: self.public_key,
@@ -100,27 +129,34 @@ impl EncryptedFile {
             })
         } else {
             let secret_key = keyfile.decrypt()?;
+            let precomputed_key = box_::precompute(&self.ephemeral_public_key, &secret_key);
 
-            if box_::open_detached(
-                &mut self.data,
-                &self.box_tag,
-                &self.box_nonce,
-                &self.ephemeral_public_key,
-                &secret_key,
-            ).is_err()
-            {
-                return Err(DecryptError::SignatureError);
-            }
-
-            while Some(&0) == self.data.last() {
-                self.data.pop().unwrap();
-            }
-
-            if self.data.pop() != Some(0x80) {
-                return Err(DecryptError::PaddingError);
-            }
-
-            Ok(self.data)
+            Ok(self.decrypt_precomputed(&precomputed_key)?)
         }
+    }
+
+    pub fn decrypt_precomputed(
+        mut self,
+        precomputed_key: &box_::PrecomputedKey,
+    ) -> Result<Vec<u8>, PrecomputedDecryptError> {
+        if box_::open_detached_precomputed(
+            &mut self.data,
+            &self.box_tag,
+            &self.box_nonce,
+            &precomputed_key,
+        ).is_err()
+        {
+            return Err(PrecomputedDecryptError::SignatureError);
+        }
+
+        while Some(&0) == self.data.last() {
+            self.data.pop().unwrap();
+        }
+
+        if self.data.pop() != Some(0x80) {
+            return Err(PrecomputedDecryptError::PaddingError);
+        }
+
+        Ok(self.data)
     }
 }

@@ -1,15 +1,14 @@
-#[macro_use]
-extern crate arrayref;
-extern crate base64;
 extern crate bincode;
 extern crate clap;
 #[macro_use]
 extern crate failure;
-extern crate libc;
-extern crate nix;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[cfg(feature = "simple-crypt-daemon")]
+extern crate simple_crypt_daemon;
+#[macro_use]
+extern crate simple_crypt_util;
 extern crate sodiumoxide;
 extern crate structopt;
 #[macro_use]
@@ -23,44 +22,42 @@ use std::process;
 use sodiumoxide::crypto::pwhash;
 
 // Common utilities
-#[macro_use]
-mod serde_fixed_value;
-mod serde_arrays;
-mod serde_newtype;
 mod passwords;
-
-// Dealing with arguments and files
 mod disk_formats;
 mod arguments;
 
 // Implemented commands
 mod keys;
 mod files;
+#[cfg(feature = "simple-crypt-daemon")]
+mod daemon;
 
 pub use disk_formats::encrypted_file::EncryptedFile;
 
-fn lock_stack<T>(bytes: usize, value: &T) -> Result<(), Error> {
-    let ptr: usize = value as *const T as usize;
-    let first_addr = (ptr - bytes) & !0xfff;
-    let last_addr = (ptr | 0xfff) + 1;
-    let length = last_addr - first_addr;
-
-    const MLOCK_ONFAULT: libc::c_int = 1;
-
-    ensure!(
-        unsafe { libc::syscall(libc::SYS_mlock2, first_addr, length, MLOCK_ONFAULT) } == 0,
-        "could not lock memory: {}",
-        nix::Errno::last().desc()
-    );
-
-    Ok(())
-}
+#[cfg(feature = "simple-crypt-daemon")]
+const SIMPLE_CRYPT_DAEMON_MODE: &str = "SIMPLE_CRYPT_DAEMON_MODE";
 
 fn run() -> Result<(), Error> {
+    #[cfg(feature = "simple-crypt-daemon")]
+    {
+        if std::env::var(SIMPLE_CRYPT_DAEMON_MODE) == Ok("1".to_string()) {
+            return simple_crypt_daemon::serve::serve();
+        }
+    }
+
     let x: u32 = 0;
-    lock_stack(16 * 1024, &x)?; // lock 16 kilobytes of stack
+
+    // lock 16k of stack below, and 1k above
+    simple_crypt_util::memory_security::lock_memory(16 * 1024, 1024, &x)?;
+    // lock down /proc and prevent core dumps
+    simple_crypt_util::memory_security::set_no_dumpable()?;
+
     sodiumoxide::init();
 
+    run_arguments()
+}
+
+pub fn run_arguments() -> Result<(), Error> {
     use arguments::*;
     match Cmd::from_args() {
         Cmd::Keys {
@@ -100,6 +97,8 @@ fn run() -> Result<(), Error> {
             input_file,
             output_file,
         } => files::decrypt(&keyfile, &input_file, &output_file),
+        #[cfg(feature = "simple-crypt-daemon")]
+        Cmd::Daemon { cmd } => daemon::handle(cmd),
     }
 }
 
