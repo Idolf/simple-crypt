@@ -2,16 +2,14 @@ use simple_crypt_daemon::service::DaemonService;
 use simple_crypt_daemon::client::Client;
 use simple_crypt_daemon::messages;
 use simple_crypt_util::pubkey_ext::PublicKeyExt;
+use simple_crypt_disk_formats::{EncryptedFile, Keyfile};
 use failure::{Error, ResultExt};
 use std::process::Command;
 use sodiumoxide::crypto::box_::PublicKey;
 use std::io::Write;
 
 use arguments::DaemonCmd;
-use disk_formats::keyfile::Keyfile;
-use disk_formats::encrypted_file::EncryptedFile;
 use std::fs::File;
-use bincode;
 
 pub fn handle(cmd: DaemonCmd) -> Result<(), Error> {
     match cmd {
@@ -34,14 +32,11 @@ pub fn handle(cmd: DaemonCmd) -> Result<(), Error> {
             messages::ShutdownResponse::Ok => (),
         },
         DaemonCmd::AddKey { keyfile } => {
-            let keyfile_data: Keyfile = {
-                let mut file = File::open(keyfile).context("could not open secret key file")?;
-                bincode::deserialize_from(&mut file, bincode::Infinite)
-                    .context("could not deserialize key file")?
-            };
+            let mut keyfile_data =
+                Keyfile::read(File::open(keyfile).context("could not open secret key file")?)?;
             let secret_key = keyfile_data.decrypt_interactive()?;
 
-            match client.add_key(keyfile_data.public_key, secret_key)? {
+            match client.add_key(*keyfile_data.public_key(), secret_key)? {
                 messages::AddKeyResponse::Ok => (),
                 messages::AddKeyResponse::OutOfCapacity => bail!("Key not added: out of capacity"),
             }
@@ -50,19 +45,15 @@ pub fn handle(cmd: DaemonCmd) -> Result<(), Error> {
             input_file,
             output_file,
         } => {
-            let input_data: EncryptedFile = {
-                let mut file = File::open(input_file).context("could not open input file")?;
-
-                bincode::deserialize_from(&mut file, bincode::Infinite)
-                    .context("could not deserialize input file")?
-            };
+            let input_file = File::open(input_file).context("could not open input file")?;
+            let input_data = EncryptedFile::read(input_file)?;
 
             let precomputed_key = match client
-                .precompute(input_data.public_key, input_data.ephemeral_public_key)?
+                .precompute(*input_data.public_key(), *input_data.ephemeral_public_key())?
             {
                 messages::PrecomputeResponse::PrecomputeDone(precomputed_key) => precomputed_key,
                 messages::PrecomputeResponse::KeyNotFound => {
-                    bail!("Key {} not found", input_data.public_key.to_base64())
+                    bail!("Key {} not found", input_data.public_key().to_base64())
                 }
             };
 

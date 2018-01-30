@@ -1,22 +1,16 @@
-extern crate bincode;
 extern crate clap;
 #[macro_use]
 extern crate failure;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-#[cfg(feature = "simple-crypt-daemon")]
-extern crate simple_crypt_daemon;
-#[macro_use]
-extern crate simple_crypt_util;
 extern crate sodiumoxide;
-#[macro_use]
-extern crate static_assertions;
 extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
 extern crate tempfile;
-extern crate termion;
+
+#[cfg(feature = "simple-crypt-daemon")]
+extern crate simple_crypt_daemon;
+extern crate simple_crypt_disk_formats;
+extern crate simple_crypt_util;
 
 #[cfg(test)]
 extern crate rand;
@@ -25,18 +19,11 @@ use failure::Error;
 use structopt::StructOpt;
 use std::process;
 
-// Common utilities
-mod passwords;
-pub mod disk_formats;
 mod arguments;
-
-// Implemented commands
 mod keys;
 mod files;
 #[cfg(feature = "simple-crypt-daemon")]
 mod daemon;
-
-pub use disk_formats::encrypted_file::EncryptedFile;
 
 #[cfg(feature = "simple-crypt-daemon")]
 const SIMPLE_CRYPT_DAEMON_MODE: &str = "SIMPLE_CRYPT_DAEMON_MODE";

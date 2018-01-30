@@ -4,7 +4,7 @@ use failure::{Error, ResultExt};
 use simple_crypt_util::serde_arrays::{self, FixedArray};
 use simple_crypt_util::serde_newtype;
 use simple_crypt_util::pwhash_limits;
-use passwords;
+use simple_crypt_util::passwords;
 use bincode;
 use std::io::{Read, Write};
 

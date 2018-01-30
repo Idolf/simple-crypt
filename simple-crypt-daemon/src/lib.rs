@@ -8,7 +8,6 @@ extern crate serde;
 extern crate serde_cbor;
 #[macro_use]
 extern crate serde_derive;
-extern crate simple_crypt_util;
 extern crate sodiumoxide;
 extern crate tokio_core;
 extern crate tokio_io;
@@ -16,6 +15,8 @@ extern crate tokio_proto;
 extern crate tokio_service;
 extern crate tokio_uds;
 extern crate void;
+
+extern crate simple_crypt_util;
 
 pub mod messages;
 mod proto;
