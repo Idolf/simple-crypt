@@ -23,8 +23,8 @@ struct EncryptionHeader {
     #[serde(with = "serde_arrays")] pub box_tag: box_::Tag,
 }
 
-const HEADER_MEMORY_SIZE: usize = 24 + 32 + 32 + 16;
-const HEADER_FILE_SIZE: usize = 4 + 4 + HEADER_MEMORY_SIZE;
+pub const HEADER_MEMORY_SIZE: usize = 24 + 32 + 32 + 16;
+pub const HEADER_FILE_SIZE: usize = 4 + 4 + HEADER_MEMORY_SIZE;
 assert_eq_size!(encrypted_file_size; EncryptionHeader, [u8; HEADER_MEMORY_SIZE]);
 const_assert!(nice_sized_header; HEADER_FILE_SIZE % 16 == 0);
 

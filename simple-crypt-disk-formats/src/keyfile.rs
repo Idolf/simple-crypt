@@ -28,8 +28,8 @@ struct KeyfileHeader {
     #[serde(with = "serde_arrays")] pub secretbox_tag: secretbox::Tag,
 }
 
-const KEYFILE_MEMORY_SIZE: usize = 32 + 32 + 8 + 8 + 32 + 24 + 16;
-const KEYFILE_FILE_SIZE: usize = 4 + 4 + KEYFILE_MEMORY_SIZE;
+pub const KEYFILE_MEMORY_SIZE: usize = 32 + 32 + 8 + 8 + 32 + 24 + 16;
+pub const KEYFILE_FILE_SIZE: usize = 4 + 4 + KEYFILE_MEMORY_SIZE;
 assert_eq_size!(keyfile_size; KeyfileHeader, [u8; KEYFILE_MEMORY_SIZE]);
 const_assert!(nice_sized_keyfile; KEYFILE_FILE_SIZE % 16 == 0);
 
