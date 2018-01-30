@@ -37,10 +37,10 @@ pub enum KeyCmd {
     Gen {
         #[structopt(help = "Output secret key file")] keyfile: String,
         #[structopt(long = "password-ops-limit", help = "Set ops limit for hashing the password")]
-        password_ops_limit: Option<usize>,
+        password_ops_limit: Option<u64>,
         #[structopt(long = "password-mem-limit",
                     help = "Set mem limit (in bytes) for hashing the password")]
-        password_mem_limit: Option<usize>,
+        password_mem_limit: Option<u64>,
     },
     #[structopt(name = "publickey", about = "Prints the public key from a secret key")]
     PrintPublickey {
@@ -50,10 +50,10 @@ pub enum KeyCmd {
     ChangePassword {
         #[structopt(help = "Output secret key file")] keyfile: String,
         #[structopt(long = "password-ops-limit", help = "Set ops limit for hashing the password")]
-        password_ops_limit: Option<usize>,
+        password_ops_limit: Option<u64>,
         #[structopt(long = "password-mem-limit",
                     help = "Set mem limit (in bytes) for hashing the password")]
-        password_mem_limit: Option<usize>,
+        password_mem_limit: Option<u64>,
     },
 }
 

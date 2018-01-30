@@ -1,9 +1,6 @@
 use sodiumoxide::crypto::box_;
-use std::fmt;
 
 use simple_crypt_util::serde_arrays::{self, FixedArray};
-use simple_crypt_util::pubkey_ext::PublicKeyExt;
-use super::keyfile;
 
 fixed_value!(MagicHeader, 0x26b1872d, "magic header");
 fixed_value!(FileVersion, 1, "secret key version");
@@ -16,69 +13,25 @@ pub struct EncryptedFile {
     #[serde(with = "serde_arrays")] pub public_key: box_::PublicKey,
     #[serde(with = "serde_arrays")] pub ephemeral_public_key: box_::PublicKey,
     #[serde(with = "serde_arrays")] pub box_tag: box_::Tag,
-    pub data: Vec<u8>,
+    #[serde(with = "serde_arrays::vec")] pub data: Vec<u8>,
 }
+
+pub const HEADER_MEMORY_SIZE: usize = 24 + 32 + 32 + 16;
+pub const HEADER_FILE_SIZE: usize = 4 + 4 + HEADER_MEMORY_SIZE;
+assert_eq_size!(encrypted_file_size; EncryptedFile, ([u8; HEADER_MEMORY_SIZE], Vec<u8>));
+const_assert!(nice_sized_header; HEADER_FILE_SIZE % 16 == 0);
 
 #[derive(Fail, Debug)]
 pub enum PrecomputedDecryptError {
-    SignatureError,
-    PaddingError,
-}
-
-impl fmt::Display for PrecomputedDecryptError {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            PrecomputedDecryptError::PaddingError => {
-                write!(formatter, "The file padding was incorrect")
-            }
-            PrecomputedDecryptError::SignatureError => write!(
-                formatter,
-                "The signature for the file did not match the content"
-            ),
-        }
-    }
+    #[fail(display = "The signature for the file did not match the content")] SignatureError,
+    #[fail(display = "The file padding was incorrect")] PaddingError,
 }
 
 #[derive(Fail, Debug)]
 pub enum DecryptError {
-    InvalidPublicKey {
-        from_encrypted: box_::PublicKey,
-        from_keyfile: box_::PublicKey,
-    },
-    SignatureError,
-    PaddingError,
-    KeyfileError(#[cause] keyfile::KeyfileError),
-}
-
-impl fmt::Display for DecryptError {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            DecryptError::InvalidPublicKey {
-                ref from_encrypted,
-                ref from_keyfile,
-            } => {
-                write!(formatter, "The public keys did not match. ")?;
-                write!(
-                    formatter,
-                    "Encrypted file was destined for {}, while keyfile contained {}.",
-                    from_encrypted.to_base64(),
-                    from_keyfile.to_base64()
-                )
-            }
-            DecryptError::SignatureError => write!(
-                formatter,
-                "The signature for the file did not match the content"
-            ),
-            DecryptError::PaddingError => write!(formatter, "The file padding was incorrect"),
-            DecryptError::KeyfileError(..) => write!(formatter, "Error while decrypting keyfile"),
-        }
-    }
-}
-
-impl From<keyfile::KeyfileError> for DecryptError {
-    fn from(error: keyfile::KeyfileError) -> DecryptError {
-        DecryptError::KeyfileError(error)
-    }
+    #[fail(display = "The supplied public key did not match the one from the file")] WrongPublicKey,
+    #[fail(display = "The signature for the file did not match the content")] SignatureError,
+    #[fail(display = "The file padding was incorrect")] PaddingError,
 }
 
 impl From<PrecomputedDecryptError> for DecryptError {
@@ -90,7 +43,7 @@ impl From<PrecomputedDecryptError> for DecryptError {
     }
 }
 
-const PADDING: usize = 32;
+const PADDING: usize = 64;
 
 impl EncryptedFile {
     pub fn encrypt(public_key: box_::PublicKey, mut data: Vec<u8>) -> EncryptedFile {
@@ -121,14 +74,14 @@ impl EncryptedFile {
         result
     }
 
-    pub fn decrypt(self, keyfile: &keyfile::Keyfile) -> Result<Vec<u8>, DecryptError> {
-        if self.public_key != keyfile.public_key {
-            Err(DecryptError::InvalidPublicKey {
-                from_encrypted: self.public_key,
-                from_keyfile: keyfile.public_key,
-            })
+    pub fn decrypt(
+        self,
+        public_key: box_::PublicKey,
+        secret_key: box_::SecretKey,
+    ) -> Result<Vec<u8>, DecryptError> {
+        if self.public_key != public_key {
+            Err(DecryptError::WrongPublicKey)
         } else {
-            let secret_key = keyfile.decrypt()?;
             let precomputed_key = box_::precompute(&self.ephemeral_public_key, &secret_key);
 
             Ok(self.decrypt_precomputed(&precomputed_key)?)
@@ -158,5 +111,26 @@ impl EncryptedFile {
         }
 
         Ok(self.data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{self, Rng};
+    use bincode;
+
+    #[test]
+    fn test_length() {
+        let mut rng = rand::thread_rng();
+        let (public_key, _secret_key) = box_::gen_keypair();
+        for n in 0..2048 {
+            println!("{}", n);
+            let data = (0..n).map(|_| rng.gen()).collect();
+            let size = bincode::serialized_size(&EncryptedFile::encrypt(public_key, data));
+            let padded_size = (n | (PADDING - 1)) + 1;
+            let expected_size = padded_size + HEADER_FILE_SIZE;
+            assert_eq!(size as usize, expected_size);
+        }
     }
 }

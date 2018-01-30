@@ -39,7 +39,7 @@ pub fn handle(cmd: DaemonCmd) -> Result<(), Error> {
                 bincode::deserialize_from(&mut file, bincode::Infinite)
                     .context("could not deserialize key file")?
             };
-            let secret_key = keyfile_data.decrypt()?;
+            let secret_key = keyfile_data.decrypt_interactive()?;
 
             match client.add_key(keyfile_data.public_key, secret_key)? {
                 messages::AddKeyResponse::Ok => (),

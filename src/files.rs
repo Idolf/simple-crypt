@@ -45,7 +45,9 @@ pub fn decrypt(keyfile: &str, input_file: &str, output_file: &str) -> Result<(),
             .context("could not deserialize input file")?
     };
 
-    let decrypted_data = input_data.decrypt(&keyfile_data)?;
+    let secret_key = keyfile_data.decrypt_interactive()?;
+
+    let decrypted_data = input_data.decrypt(keyfile_data.public_key, secret_key)?;
 
     let mut output_file = File::create(output_file).context("could not open output file")?;
     output_file

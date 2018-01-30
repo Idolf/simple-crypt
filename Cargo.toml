@@ -16,6 +16,10 @@ clap = "2.29.2"
 tempfile = "2.2.0"
 simple-crypt-util = { path = "simple-crypt-util" }
 simple-crypt-daemon = { path = "simple-crypt-daemon", optional = true }
+static_assertions = "0.2.5"
+
+[dev-dependencies]
+rand = "0.4.2"
 
 [features]
 default = ["simple-crypt-daemon"]

@@ -12,3 +12,4 @@ pub mod serde_arrays;
 pub mod serde_newtype;
 pub mod memory_security;
 pub mod pubkey_ext;
+pub mod pwhash_limits;

@@ -114,3 +114,45 @@ pub mod bytes {
     }
 
 }
+
+pub mod vec {
+    use super::*;
+
+    pub fn serialize<S>(values: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut serializer = serializer.serialize_tuple(values.len())?;
+        for value in values.as_slice() {
+            serializer.serialize_element(value)?;
+        }
+        serializer.end()
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct VecVisitor;
+        impl<'de> Visitor<'de> for VecVisitor {
+            type Value = Vec<u8>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a number of bytes")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let mut out = Vec::new();
+                while let Some(next) = seq.next_element()? {
+                    out.push(next)
+                }
+                Ok(out)
+            }
+        }
+
+        deserializer.deserialize_any(VecVisitor)
+    }
+}

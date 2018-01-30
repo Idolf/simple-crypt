@@ -10,20 +10,24 @@ extern crate simple_crypt_daemon;
 #[macro_use]
 extern crate simple_crypt_util;
 extern crate sodiumoxide;
+#[macro_use]
+extern crate static_assertions;
 extern crate structopt;
 #[macro_use]
 extern crate structopt_derive;
 extern crate tempfile;
 extern crate termion;
 
+#[cfg(test)]
+extern crate rand;
+
 use failure::Error;
 use structopt::StructOpt;
 use std::process;
-use sodiumoxide::crypto::pwhash;
 
 // Common utilities
 mod passwords;
-mod disk_formats;
+pub mod disk_formats;
 mod arguments;
 
 // Implemented commands
@@ -67,11 +71,7 @@ pub fn run_arguments() -> Result<(), Error> {
                     password_ops_limit,
                     password_mem_limit,
                 },
-        } => keys::gen(
-            &keyfile,
-            password_ops_limit.map(pwhash::OpsLimit),
-            password_mem_limit.map(pwhash::MemLimit),
-        ),
+        } => keys::gen(&keyfile, password_ops_limit, password_mem_limit),
         Cmd::Keys {
             cmd: KeyCmd::PrintPublickey { keyfile },
         } => keys::print_public_key(&keyfile),
@@ -82,11 +82,7 @@ pub fn run_arguments() -> Result<(), Error> {
                     password_ops_limit,
                     password_mem_limit,
                 },
-        } => keys::change_password(
-            &keyfile,
-            password_ops_limit.map(pwhash::OpsLimit),
-            password_mem_limit.map(pwhash::MemLimit),
-        ),
+        } => keys::change_password(&keyfile, password_ops_limit, password_mem_limit),
         Cmd::Encrypt {
             public_key,
             input_file,

@@ -1,25 +1,32 @@
 use failure::{self, Error, ResultExt};
-use sodiumoxide::crypto::{box_, pwhash};
+use sodiumoxide::crypto::box_;
 use std::fs::File;
 use bincode;
 use tempfile::NamedTempFile;
 use std::path::Path;
 use simple_crypt_util::pubkey_ext::PublicKeyExt;
+use simple_crypt_util::pwhash_limits;
+use passwords;
 
 use disk_formats::keyfile::Keyfile;
 
 pub fn gen(
     keyfile: &str,
-    password_ops_limit: Option<pwhash::OpsLimit>,
-    password_mem_limit: Option<pwhash::MemLimit>,
+    password_ops_limit: Option<u64>,
+    password_mem_limit: Option<u64>,
 ) -> Result<(), Error> {
     let (public_key, secret_key) = box_::gen_keypair();
 
     let keyfile_data = Keyfile::encrypt(
         public_key,
         secret_key,
-        password_ops_limit.unwrap_or(pwhash::OPSLIMIT_SENSITIVE),
-        password_mem_limit.unwrap_or(pwhash::MEMLIMIT_SENSITIVE),
+        password_ops_limit
+            .map(pwhash_limits::OpsLimit)
+            .unwrap_or(pwhash_limits::OPSLIMIT_SENSITIVE),
+        password_mem_limit
+            .map(pwhash_limits::MemLimit)
+            .unwrap_or(pwhash_limits::MEMLIMIT_SENSITIVE),
+        &passwords::read_password_twice()?,
     )?;
 
     println!(
@@ -49,8 +56,8 @@ pub fn print_public_key(keyfile: &str) -> Result<(), Error> {
 
 pub fn change_password(
     keyfile: &str,
-    password_ops_limit: Option<pwhash::OpsLimit>,
-    password_mem_limit: Option<pwhash::MemLimit>,
+    password_ops_limit: Option<u64>,
+    password_mem_limit: Option<u64>,
 ) -> Result<(), Error> {
     let keyfile: &Path = keyfile.as_ref();
     let keyfile = keyfile
@@ -68,15 +75,20 @@ pub fn change_password(
     };
 
     println!("Decrypting current keyfile");
-    let secret_key = keyfile_data.decrypt()?;
+    let secret_key = keyfile_data.decrypt_interactive()?;
 
     println!();
     println!("Encrypting new keyfile");
     let new_keyfile_data = Keyfile::encrypt(
         keyfile_data.public_key,
         secret_key,
-        password_ops_limit.unwrap_or(pwhash::OPSLIMIT_SENSITIVE),
-        password_mem_limit.unwrap_or(pwhash::MEMLIMIT_SENSITIVE),
+        password_ops_limit
+            .map(pwhash_limits::OpsLimit)
+            .unwrap_or(pwhash_limits::OPSLIMIT_SENSITIVE),
+        password_mem_limit
+            .map(pwhash_limits::MemLimit)
+            .unwrap_or(pwhash_limits::MEMLIMIT_SENSITIVE),
+        &passwords::read_password_twice()?,
     )?;
 
     let mut temp_keyfile =

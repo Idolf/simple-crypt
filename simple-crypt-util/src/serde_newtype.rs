@@ -1,5 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sodiumoxide::crypto::{box_, pwhash, secretbox};
+use pwhash_limits;
 
 use serde_arrays::FixedArray;
 
@@ -86,3 +87,6 @@ newtype_array!(secretbox::Tag, secretbox::MACBYTES);
 
 newtype!(pwhash::OpsLimit, usize);
 newtype!(pwhash::MemLimit, usize);
+
+newtype!(pwhash_limits::OpsLimit, u64);
+newtype!(pwhash_limits::MemLimit, u64);
