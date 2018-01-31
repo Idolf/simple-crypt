@@ -10,11 +10,13 @@ use std::io::Write;
 
 use arguments::DaemonCmd;
 use std::fs::File;
+use std::env;
 
 pub fn handle(cmd: DaemonCmd) -> Result<(), Error> {
     match cmd {
         DaemonCmd::Start => {
-            let _exit_code = Command::new("/proc/self/exe")
+            let executable = env::current_exe().context("unable to get current executbale")?;
+            let _exit_code = Command::new(executable)
                 .env(super::SIMPLE_CRYPT_DAEMON_MODE, "1")
                 .spawn()
                 .context("cannot spawn daemon process")?
