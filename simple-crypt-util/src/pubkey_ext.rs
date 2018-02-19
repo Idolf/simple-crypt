@@ -10,7 +10,7 @@ pub trait PublicKeyExt: Sized {
 
 impl PublicKeyExt for PublicKey {
     fn from_base64(s: &str) -> Result<Self, failure::Error> {
-        let decoded = base64::decode(s)?;
+        let decoded = base64::decode_config(s, base64::STANDARD_NO_PAD)?;
         ensure!(decoded.len() == Self::SIZE, "invalid base64 length");
 
         let mut result = Self::zero();
@@ -19,6 +19,6 @@ impl PublicKeyExt for PublicKey {
     }
 
     fn to_base64(&self) -> String {
-        base64::encode(self.as_slice())
+        base64::encode_config(self.as_slice(), base64::STANDARD_NO_PAD)
     }
 }
